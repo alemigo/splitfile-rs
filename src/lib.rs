@@ -1,9 +1,10 @@
+#![warn(missing_docs)]
 //! File i/o across volumes.
 //!
 //! This module contains methods designed to mirror and be used in place
-//! of fs::OpenOptions and fs::File, that while providing the interace
-//! of a single file, read and write data across one or more volumes of
-//! a specified maximum size.  
+//! of `fs::OpenOptions` and `fs::File`, that while providing the interace 
+//! of a single file, read and write data across one or more volumes of a 
+//! specified maximum size. 
 //!
 //! Example use cases include using SplitFile as a reader/writer in 
 //! conjunction with crates such as tar, zip, rust-lzma, etc.
@@ -19,18 +20,8 @@ use std::path::{Path, PathBuf};
 
 /// Options and flags which can be used to configure how a file is opened.
 ///
-/// This builder mirrors the usage and options of ['fs::OpenOptions'], and returns
-/// a ['SplitFile'] instance.
-///
-/// # Examples
-///
-/// Creating a file to write, with volumes having a maximum size of 1,000:
-///
-/// ```no_run
-/// //use splitfile::{SplitFile, OpenOptions);
-///
-/// //let sfile = OpenOptions::new().create(true).write(true).open("foo.txt", 1000);
-/// ```
+/// This builder mirrors the usage and options of `fs::OpenOptions`, and 
+/// returns a `SplitFile` instance.
 #[derive(Clone, Debug)]
 pub struct OpenOptions {
     read: bool,
@@ -44,7 +35,8 @@ pub struct OpenOptions {
 /// A reference to an open set of volumes on the filesystem.
 ///
 /// An instance of SplitFile can be read and/or written in the same way as a
-/// single file is via ['fs::File'], but with data allocated across volumes.  
+/// single file is via `fs::File`, but with data allocated 
+/// across volumes. 
 ///
 /// Second and subsequent volumes written use the path and filename of the
 /// first volume, and append the extension ".n", where n is the index of each
@@ -103,6 +95,9 @@ impl<'a> Filenames<'a> {
 }
 
 impl OpenOptions {
+    /// Creates a blank set of options ready for configuartion.
+    ///
+    /// All options are initially set to `false`.
     pub fn new() -> OpenOptions {
         OpenOptions {
             read: false,
@@ -114,36 +109,67 @@ impl OpenOptions {
         }
     }
 
+    /// Sets the option for read access.
+    ///
+    /// This option, when true, will indicate that the file should be
+    /// `read`-able if opened.
     pub fn read(&mut self, read: bool) -> &mut OpenOptions {
         self.read = read;
         self
     }
 
+    /// Sets the option for write access.
+    ///
+    /// This option, when true, will indicate that the file should be
+    /// `write`-able if opened.
     pub fn write(&mut self, write: bool) -> &mut OpenOptions {
         self.write = write;
         self
     }
 
+    /// Sets the option for append mode.
+    ///
+    /// This option, when true, means that writes will append to a file instead
+    /// of overwriting previous contents.
     pub fn append(&mut self, append: bool) -> &mut OpenOptions {
         self.append = append;
         self
     }
 
+    /// Sets the option for trncating a previous file.  This truncate the first
+    /// volume, and delete all additional volume files using `fs::remove_file`.
     pub fn truncate(&mut self, truncate: bool) -> &mut OpenOptions {
         self.truncate = truncate;
         self
     }
 
+    /// Sets the option for creating a new file.
+    ///
+    /// This option indicates whether a new file will be created if the file
+    /// does not yet already exist.
+    ///
+    /// In order for the file to be created, [`write`] or [`append`] access must
+    /// be used.
+    ///
+    /// [`write`]: #method.write
+    /// [`append`]: #method.append
     pub fn create(&mut self, create: bool) -> &mut OpenOptions {
         self.create = create;
         self
     }
 
+    /// Sets the option to always create a new file.
+    ///
+    /// This option indicates whether a new file will be created.
+    /// No file is allowed to exist at the target location, also no (dangling)
+    /// symlink.
     pub fn create_new(&mut self, create_new: bool) -> &mut OpenOptions {
         self.create_new = create_new;
         self
     }
 
+    /// Opens a file at `path` with the options specified by `self`.  Path refers
+    /// to the path of the first volume.
     pub fn open<P: AsRef<Path>>(&self, path: P, volsize: u64) -> Result<SplitFile> {
         self._open(path.as_ref(), volsize)
     }
@@ -246,10 +272,17 @@ impl Write for Volume {
 }
 
 impl SplitFile {
+    /// Attempts to open a file in read-only mode.
+    ///
+    /// See the `OpenOptions::open` method for more details.
     pub fn open<P: AsRef<Path>>(path: P, volsize: u64) -> Result<SplitFile> {
         OpenOptions::new().read(true)._open(path.as_ref(), volsize)
     }
 
+    /// Opens a file in write-only mode.
+    ///
+    /// This function will create a file if it does not exist,
+    /// and will truncate it if it does.
     pub fn create<P: AsRef<Path>>(path: P, volsize: u64) -> Result<SplitFile> {
         OpenOptions::new()
             .write(true)
