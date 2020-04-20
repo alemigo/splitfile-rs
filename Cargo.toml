@@ -1,10 +1,17 @@
 [package]
 name = "splitfile"
 version = "0.1.0"
-authors = ["alemigo <alexmigon@gmail.com>"]
+authors = ["github.com/alemigo"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+description = "Reader and writer that splits IO across volumes (files) of a specified maximum size."
+documentation = "https://docs.rs/splitfile"
+readme = "README.md"
+repository = "https://github.com/alemigo/splitfile-rs"
+keywords = ["split", "volumes", "archive", "reader", "writer"]
+categories = ["filesystem"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[dev-dependencies]
 tempfile = "3.1.0"

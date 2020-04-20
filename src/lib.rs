@@ -6,7 +6,7 @@
 //! of a single file, read and write data across one or more volumes of a 
 //! specified maximum size. 
 //!
-//! Example use cases include using SplitFile as a reader/writer in 
+//! Example use cases include using `splitfile` as a reader/writer in 
 //! conjunction with crates such as tar, zip, rust-lzma, etc.
 //!
 
@@ -462,7 +462,7 @@ mod tests {
             .open(path.as_path(), 15)
             .expect("error opening file - create");
         file.write(&data).expect("write error");
-        file.flush();
+        file.flush().expect("flush");
         drop(file);
 
         let mut file = SplitFile::open(path.as_path(), 15).expect("error opening file - read");
@@ -483,7 +483,7 @@ mod tests {
             .expect("error opening file - append");
 
         file.write(&data2).expect("write error");
-        file.flush();
+        file.flush().expect("flush");
 
         file.seek(SeekFrom::Current(-30)).expect("seek error");
         file.read(&mut rdata2).expect("read error");
@@ -500,7 +500,7 @@ mod tests {
             .expect("file open error - truncate");
 
         file.write(&data2).expect("write error");
-        file.flush();
+        file.flush().expect("flush");
         drop(file);
 
         let mut file = OpenOptions::new()
