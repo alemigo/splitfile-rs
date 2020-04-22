@@ -5,7 +5,7 @@ This module contains methods designed to mirror and be used in place of fs::Open
 
 Example use cases include using SplitFile as a reader/writer in conjunction with crates such as tar, zip, rust-lzma, etc.
 
-# Links
+## Links
 
-[Crates.io](https://crates.io/crates/splitfile)
-[Docs.rs](https://docs.rs/splitfile)
+Crate on [crates.io](https://crates.io/crates/splitfile)
+Documentation on [docs.rs](https://docs.rs/splitfile)
