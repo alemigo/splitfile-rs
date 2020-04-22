@@ -7,6 +7,5 @@ Example use cases include using SplitFile as a reader/writer in conjunction with
 
 ### Links
 
-Crate on [crates.io](https://crates.io/crates/splitfile)
-
-Documentation on [docs.rs](https://docs.rs/splitfile)
+* Crate on [crates.io](https://crates.io/crates/splitfile)
+* Documentation on [docs.rs](https://docs.rs/splitfile)
