@@ -2,11 +2,11 @@
 //! File i/o across volumes.
 //!
 //! This module contains methods designed to mirror and be used in place
-//! of `fs::OpenOptions` and `fs::File`, that while providing the interace 
-//! of a single file, read and write data across one or more volumes of a 
-//! specified maximum size. 
+//! of `fs::OpenOptions` and `fs::File`, that while providing the interace
+//! of a single file, read and write data across one or more volumes of a
+//! specified maximum size.
 //!
-//! Example use cases include using `splitfile` as a reader/writer in 
+//! Example use cases include using `splitfile` as a reader/writer in
 //! conjunction with crates such as tar, zip, rust-lzma, etc.
 //!
 
@@ -20,9 +20,9 @@ use std::path::{Path, PathBuf};
 
 /// Options and flags which can be used to configure how a file is opened.
 ///
-/// This builder mirrors the usage and options of `fs::OpenOptions`, and 
+/// This builder mirrors the usage and options of `fs::OpenOptions`, and
 /// returns a `SplitFile` instance.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct OpenOptions {
     read: bool,
     write: bool,
@@ -35,8 +35,8 @@ pub struct OpenOptions {
 /// A reference to an open set of volumes on the filesystem.
 ///
 /// An instance of SplitFile can be read and/or written in the same way as a
-/// single file is via `fs::File`, but with data allocated 
-/// across volumes. 
+/// single file is via `fs::File`, but with data allocated
+/// across volumes.
 ///
 /// Second and subsequent volumes written use the path and filename of the
 /// first volume, and append the extension ".n", where n is the index of each
@@ -61,33 +61,30 @@ struct Volume {
 }
 
 #[derive(Debug)]
-struct Filenames<'a> {
-    path: &'a Path,
+struct Filenames {
+    path: PathBuf,
     index: usize,
 }
 
-impl<'a> Iterator for Filenames<'a> {
+impl Iterator for Filenames {
     type Item = PathBuf;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.index += 1;
-        Some(self.by_index(self.index))
+        Some(Filenames::by_index(self.path.clone(), self.index))
     }
 }
 
-impl<'a> Filenames<'a> {
-    fn new(path: &Path) -> Filenames {
-        Filenames {
-            path: path,
-            index: 0,
-        }
+impl Filenames {
+    fn new(path: PathBuf, start_index: usize) -> Filenames {
+        Filenames { path, index: start_index - 1 }
     }
 
-    fn by_index(&self, index: usize) -> PathBuf {
-        if index == 1 {
-            self.path.to_path_buf()
+    fn by_index(path: PathBuf, index: usize) -> PathBuf {
+        if index ==1 {
+            path
         } else {
-            let mut os = OsString::from(self.path.as_os_str());
+            let mut os = path.into_os_string();
             os.push(OsString::from(format!(".{}", index.to_string())));
             PathBuf::from(os)
         }
@@ -99,14 +96,7 @@ impl OpenOptions {
     ///
     /// All options are initially set to `false`.
     pub fn new() -> OpenOptions {
-        OpenOptions {
-            read: false,
-            write: false,
-            append: false,
-            truncate: false,
-            create: false,
-            create_new: false,
-        }
+        Default::default()
     }
 
     /// Sets the option for read access.
@@ -169,7 +159,8 @@ impl OpenOptions {
     }
 
     /// Opens a file at `path` with the options specified by `self`.  Path refers
-    /// to the path of the first volume.
+    /// to the path of the first volume.  Volsize is the maximum size of each
+    /// volume.
     pub fn open<P: AsRef<Path>>(&self, path: P, volsize: u64) -> Result<SplitFile> {
         self._open(path.as_ref(), volsize)
     }
@@ -180,7 +171,7 @@ impl OpenOptions {
 }
 
 impl Volume {
-    fn open(path: &Path, opts: &OpenOptions, first_open: &mut bool) -> Result<Volume> {
+    fn open(path: PathBuf, opts: &OpenOptions, first_open: &mut bool) -> Result<Volume> {
         Ok(Volume {
             file: Volume::open_file(path, opts, first_open)?,
             pos: 0,
@@ -188,7 +179,7 @@ impl Volume {
         })
     }
 
-    fn open_file(path: &Path, opts: &OpenOptions, first_open: &mut bool) -> Result<File> {
+    fn open_file(path: PathBuf, opts: &OpenOptions, first_open: &mut bool) -> Result<File> {
         let w = match (*first_open, opts.append) {
             (false, true) => true,
             _ => opts.write,
@@ -221,17 +212,17 @@ impl Volume {
     }
 
     fn init_volumes(path: &Path, opts: &OpenOptions, first_open: &mut bool) -> Result<Vec<Volume>> {
-        Ok(Filenames::new(path)
+        Ok(Filenames::new(path.to_path_buf(), 1)
             .enumerate()
             .take_while(|(i, p)| *i == 0 || p.is_file())
             .map(|(_, p): (_, PathBuf)| -> Result<Volume> {
-                Ok(Volume::open(p.as_path(), opts, first_open)?)
+                Ok(Volume::open(p, opts, first_open)?)
             })
             .collect::<Result<Vec<Volume>>>()?)
     }
 
     fn truncate_volumes(path: &Path) -> Result<()> {
-        for p in Filenames::new(path).skip(1) {
+        for p in Filenames::new(path.to_path_buf(), 2) {
             if let Err(e) = fs::remove_file(p) {
                 match e.kind() {
                     ErrorKind::NotFound => break,
@@ -317,13 +308,19 @@ impl SplitFile {
     fn add_volume(&mut self) -> Result<&mut Volume> {
         let index = self.volumes.len() + 1;
         self.volumes.push(Volume::open(
-            Filenames::new(self.path.as_path())
-                .by_index(index)
-                .as_path(),
+            Filenames::by_index(self.path.clone(), index),
             &self.opts,
             &mut self.first_open,
         )?);
         Ok(self.volumes.last_mut().unwrap())
+    }
+
+    fn len(&mut self) -> Result<u64> {
+        let v: &mut Volume = self.volumes.last_mut().expect("No volumes exist");
+        v.pos = v.file.seek(SeekFrom::End(0))?;
+        v.reset = true;
+        let last_file_size = v.pos;
+        Ok((cmp::max(self.volumes.len() - 1, 0) as u64 * self.volsize) + last_file_size)
     }
 }
 
@@ -386,34 +383,36 @@ impl Write for SplitFile {
 
 impl Seek for SplitFile {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
-        let v: &mut Volume = self.volumes.last_mut().expect("No volumes exist");
-        let last_vol_size = if v.pos > 0 {
-            v.pos
-        } else {
-            v.pos = v.file.seek(SeekFrom::End(0))?;
-            v.reset = true;
-            v.pos
+        let mut filesize: u64 = 0;
+
+        if let SeekFrom::End(_) = pos {
+            filesize = self.len()?;
+        }
+
+        let mut apos: u64 = match pos {
+            SeekFrom::Start(off) => off,
+            SeekFrom::End(off) => safe_add(filesize, off)?,
+            SeekFrom::Current(off) => safe_add(
+                ((self.index - 1) as u64 * self.volsize) + self.volumes[self.index - 1].pos,
+                off,
+            )?,
         };
 
-        let filesize = (cmp::max(self.volumes.len() - 1, 0) as u64 * self.volsize) + last_vol_size;
-
-        let apos: u64 = cmp::min(
-            filesize,
-            match pos {
-                SeekFrom::Start(off) => off,
-                SeekFrom::End(off) => safe_add(filesize, off)?,
-                SeekFrom::Current(off) => safe_add(
-                    ((self.index - 1) as u64 * self.volsize) + self.volumes[self.index - 1].pos,
-                    off,
-                )?,
-            },
-        );
+        //if absolute seek position is in or beyond last volume, prevent seek
+        //beyond end of file
+        if ((apos / self.volsize) + 1) as usize >= self.volumes.len() {
+            if filesize == 0 {
+                filesize = self.len()?;
+            }
+            apos = cmp::min(apos, filesize);
+        }
 
         self.index = ((apos / self.volsize) + 1) as usize;
-        let p = apos - ((self.index - 1) as u64 * self.volsize);
+        let vpos = apos - ((self.index - 1) as u64 * self.volsize);
 
-        self.volumes[self.index - 1].pos =
-            self.volumes[self.index - 1].file.seek(SeekFrom::Start(p))?;
+        self.volumes[self.index - 1].pos = self.volumes[self.index - 1]
+            .file
+            .seek(SeekFrom::Start(vpos))?;
         self.volumes[self.index - 1].reset = false;
 
         for v in self.volumes.iter_mut().skip(self.index) {
