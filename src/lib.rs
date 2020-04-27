@@ -77,11 +77,14 @@ impl Iterator for Filenames {
 
 impl Filenames {
     fn new(path: PathBuf, start_index: usize) -> Filenames {
-        Filenames { path, index: start_index - 1 }
+        Filenames {
+            path,
+            index: start_index - 1,
+        }
     }
 
     fn by_index(path: PathBuf, index: usize) -> PathBuf {
-        if index ==1 {
+        if index == 1 {
             path
         } else {
             let mut os = path.into_os_string();
