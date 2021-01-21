@@ -61,33 +61,33 @@ struct Volume {
 }
 
 #[derive(Debug)]
-struct Filenames {
-    path: PathBuf,
+struct Filenames<'a> {
+    path: &'a Path,
     index: usize,
 }
 
-impl Iterator for Filenames {
+impl<'a> Iterator for Filenames<'a> {
     type Item = PathBuf;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.index += 1;
-        Some(Filenames::by_index(self.path.clone(), self.index))
+        Some(Filenames::by_index(self.path, self.index))
     }
 }
 
-impl Filenames {
-    fn new(path: PathBuf, start_index: usize) -> Filenames {
+impl<'a> Filenames<'a> {
+    fn new(path: &'a Path, start_index: usize) -> Filenames<'a> {
         Filenames {
-            path,
+            path: path,
             index: start_index - 1,
         }
     }
 
-    fn by_index(path: PathBuf, index: usize) -> PathBuf {
+    fn by_index(path: &'a Path, index: usize) -> PathBuf {
         if index == 1 {
-            path
+            path.to_path_buf()
         } else {
-            let mut os = path.into_os_string();
+            let mut os = path.as_os_str().to_os_string();
             os.push(OsString::from(format!(".{}", index.to_string())));
             PathBuf::from(os)
         }
@@ -215,7 +215,7 @@ impl Volume {
     }
 
     fn init_volumes(path: &Path, opts: &OpenOptions, first_open: &mut bool) -> Result<Vec<Volume>> {
-        Ok(Filenames::new(path.to_path_buf(), 1)
+        Ok(Filenames::new(path, 1)
             .enumerate()
             .take_while(|(i, p)| *i == 0 || p.is_file())
             .map(|(_, p): (_, PathBuf)| -> Result<Volume> {
@@ -225,7 +225,7 @@ impl Volume {
     }
 
     fn truncate_volumes(path: &Path) -> Result<()> {
-        for p in Filenames::new(path.to_path_buf(), 2) {
+        for p in Filenames::new(path, 2) {
             if let Err(e) = fs::remove_file(p) {
                 match e.kind() {
                     ErrorKind::NotFound => break,
@@ -311,7 +311,7 @@ impl SplitFile {
     fn add_volume(&mut self) -> Result<&mut Volume> {
         let index = self.volumes.len() + 1;
         self.volumes.push(Volume::open(
-            Filenames::by_index(self.path.clone(), index),
+            Filenames::by_index(self.path.as_path(), index),
             &self.opts,
             &mut self.first_open,
         )?);
